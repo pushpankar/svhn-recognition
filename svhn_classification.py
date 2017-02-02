@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from svhn_data import get_test_data, train_and_validation_data
+from svhn_data import get_test_data, train_and_validation_data,get_train_data
 
 def weight_variable(shape):
     return tf.Variable(tf.truncated_normal(shape, stddev=0.1))
@@ -8,33 +8,34 @@ def weight_variable(shape):
 def bias_variable(shape):
     return tf.Variable(tf.constant(1.0, shape=shape))
 def accuracy(predictions, labels):
-    return (100.0 * np.sum(np.argmax(predictions) == np.argmax(labels))/ predictions.shape[0])
+    return (100.0 * np.sum(np.argmax(predictions, 2) == np.argmax(labels, 2))/ predictions.shape[0])/6
 
-Xtrain, Xvalidation, ytrain, yvalidation = train_and_validation_data("cropped-svhn/")
-Xtest, ytest = get_test_data("cropped-svhn/")
+offset = 0
 
+image_height = 128
+image_width = 256
+num_channels = 2
+num_labels = 11
+num_digits = 6
 
-#print dimensions
-print("Xtrain shape is {} and ytrain shape is {}".format(Xtrain.shape, ytrain.shape))
-print("Xvalidation shape is {} and yvalidation shape is {}".format(Xvalidation.shape, yvalidation.shape))
-
-image_size = 32
-num_channels = 3
-num_labels = 10
-
-batch_size = 50
-patch_size = 3
+batch_size = 30
+patch_size = 5
 depth = 128
 num_hidden = 512
 
+Xvalidation, yvalidation = get_train_data('train/',offset,batch_size)
+offset += batch_size
+
+#print dimensions
+print("Xvalidation shape is {} and yvalidation shape is {}".format(Xvalidation.shape, yvalidation.shape))
 
 #build a graph
 graph = tf.Graph()
 with graph.as_default():
-    tf_train_dataset = tf.placeholder(tf.float32, shape=(batch_size, image_size, image_size, num_channels))
-    tf_train_labels  = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
+    tf_train_dataset = tf.placeholder(tf.float32, shape=(batch_size, image_height, image_width, num_channels))
+    tf_train_labels  = tf.placeholder(tf.float32, shape=(batch_size, num_digits, num_labels))
     tf_valid_dataset = tf.cast(tf.constant(Xvalidation),tf.float32)
-    tf_test_dataset = tf.constant(Xtest)
+    #tf_test_dataset = tf.constant(Xtest)
 
     #Create variables
     #convolutions layer 1
@@ -51,12 +52,12 @@ with graph.as_default():
 
     #later Insert Regression head here
     #layer 4
-    layer4_W = weight_variable([image_size//8*image_size//8*depth, num_hidden])
+    layer4_W = weight_variable([image_height//8*image_width//8*depth, num_hidden])
     layer4_bias = bias_variable([num_hidden])
 
     #layer 5
-    layer5_W = weight_variable([num_hidden, num_labels])
-    layer5_bias = bias_variable([num_labels])
+    layer5_Ws = [weight_variable([num_hidden, num_labels]) for _ in xrange(num_digits)]
+    layer5_biases = [bias_variable([num_labels]) for _ in xrange(num_digits)]
 
     #Design model
     def model(data):
@@ -66,26 +67,25 @@ with graph.as_default():
         shape = conv3.get_shape().as_list()
         reshaped = tf.reshape(conv3, [shape[0], shape[1] * shape[2] * shape[3]])
         hidden1 = tf.nn.relu(tf.matmul(reshaped, layer4_W) + layer4_bias)
-        return tf.matmul(hidden1, layer5_W) + layer5_bias
+        return [tf.matmul(hidden1, layer5_W) + layer5_bias for layer5_W, layer5_bias in zip(layer5_Ws, layer5_biases)]
 
     logits = model(tf_train_dataset)
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits,tf_train_labels))
+    loss_per_digit = [tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits[i], tf_train_labels[:,i,:])) for i in xrange(num_digits)]
+    loss = tf.add_n(loss_per_digit)
 
     #optimizer
     optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss)
-    train_prediction = tf.nn.softmax(logits)
-    validation_prediction = tf.nn.softmax(model(tf_valid_dataset))
-    test_prediction = tf.nn.softmax(model(tf_test_dataset))
+    train_prediction = tf.transpose(tf.nn.softmax(logits), [1,0,2])
+    validation_prediction = tf.transpose(tf.nn.softmax(model(tf_valid_dataset)), [1,0,2])
+#    test_prediction = tf.nn.softmax(model(tf_test_dataset))
 
 with tf.Session(graph=graph) as session:
     tf.global_variables_initializer().run()
     print('Initialized')
     
 
-    offset = 0
     for step in range(1001):
-        batch_data = Xtrain[offset:offset+batch_size]
-        batch_label = ytrain[offset:offset+batch_size]
+        batch_data, batch_label = get_train_data('train/',offset,batch_size)
         offset += batch_size
         feed_dict = { tf_train_dataset: batch_data,
                       tf_train_labels : batch_label }

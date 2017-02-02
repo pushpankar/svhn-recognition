@@ -69,14 +69,11 @@ def get_train_data(path, offset, batch_size):
         index += 1
         if im.shape[0] < 128 and im.shape[1] < 256:
             a = pad_images(im)
-            print(a.shape)
             loaded_images.append(a)
             small_images_indices.append(index)
 
     ytrain = np.array(metadata['label'])[small_images_indices]
     ytrain = one_hot_encode(ytrain)
-    Image.open(path+imagelist[small_images_indices[0]]).show()
-    print(ytrain[0])
     return np.array(loaded_images), np.array(ytrain)
 
 def get_test_data(path):
