@@ -1,21 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from scipy.io import loadmat
-
-train = loadmat("cropped-svhn/train_32x32.mat")
-test  = loadmat("cropped-svhn/test_32x32.mat")
-
-def one_hot_encode(labels):
-    b = np.zeros((labels.shape[0],10))
-    b[np.arange(labels.shape[0]), labels[1]] = 1
-    return b
-
-Xtrain = np.rollaxis(train['X'],3)
-Xtest = np.rollaxis(test['X'].astype(np.float32),3)
-
-ytrain = one_hot_encode(train['y'])
-ytest  = one_hot_encode(test['y'])
-
+from svhn_data import get_test_data, train_and_validation_data
 
 def weight_variable(shape):
     return tf.Variable(tf.truncated_normal(shape, stddev=0.1))
@@ -25,16 +10,21 @@ def bias_variable(shape):
 def accuracy(predictions, labels):
     return (100.0 * np.sum(np.argmax(predictions) == np.argmax(labels))/ predictions.shape[0])
 
+Xtrain, Xvalidation, ytrain, yvalidation = train_and_validation_data("cropped-svhn/")
+Xtest, ytest = get_test_data("cropped-svhn/")
+
+
 #print dimensions
 print("Xtrain shape is {} and ytrain shape is {}".format(Xtrain.shape, ytrain.shape))
+print("Xvalidation shape is {} and yvalidation shape is {}".format(Xvalidation.shape, yvalidation.shape))
 
 image_size = 32
 num_channels = 3
 num_labels = 10
 
 batch_size = 50
-patch_size = 5
-depth = 512
+patch_size = 3
+depth = 128
 num_hidden = 512
 
 
@@ -43,6 +33,7 @@ graph = tf.Graph()
 with graph.as_default():
     tf_train_dataset = tf.placeholder(tf.float32, shape=(batch_size, image_size, image_size, num_channels))
     tf_train_labels  = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
+    tf_valid_dataset = tf.cast(tf.constant(Xvalidation),tf.float32)
     tf_test_dataset = tf.constant(Xtest)
 
     #Create variables
@@ -60,7 +51,7 @@ with graph.as_default():
 
     #later Insert Regression head here
     #layer 4
-    layer4_W = weight_variable([8192, num_hidden])
+    layer4_W = weight_variable([image_size//8*image_size//8*depth, num_hidden])
     layer4_bias = bias_variable([num_hidden])
 
     #layer 5
@@ -83,7 +74,8 @@ with graph.as_default():
     #optimizer
     optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss)
     train_prediction = tf.nn.softmax(logits)
-#    test_prediction = tf.nn.softmax(model(tf_test_dataset))
+    validation_prediction = tf.nn.softmax(model(tf_valid_dataset))
+    test_prediction = tf.nn.softmax(model(tf_test_dataset))
 
 with tf.Session(graph=graph) as session:
     tf.global_variables_initializer().run()
@@ -98,7 +90,7 @@ with tf.Session(graph=graph) as session:
         feed_dict = { tf_train_dataset: batch_data,
                       tf_train_labels : batch_label }
         _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict = feed_dict)
-        if step%100 == 0:
-            print('Minibatch accuracy at step {}: {}'.format(step, accuracy(predictions, batch_label)))
-            #print('Test accuracy is {}'.format(accuracy(test_prediction.eval(), test_labels)))
+        if step%1 == 0:
+            print('Minibatch accuracy at step {} : {} and loss is {}'.format(step, accuracy(predictions, batch_label),l))
+            print('Validation accuracy is {}'.format(accuracy(validation_prediction.eval(), yvalidation)))
                                                              
