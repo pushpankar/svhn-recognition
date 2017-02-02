@@ -46,33 +46,28 @@ def one_hot_encode(labels):
             b[img_num,index,10] = 0
     return b
 
-def pad_images(image):
-    a = np.random.rand(128,256,2)
-    left = (128 - image.shape[0])//2
-    top = (256 - image.shape[1])//2
-    a[left:left+image.shape[0],top:top+image.shape[1]] = image
-    return a
-
 def get_train_data(path, offset, batch_size):
     if not os.path.exists(path + 'train_metadata.pickle'):
         prepare_data()
     with open('train/train_metadata.pickle', 'rb') as f:
         metadata = pickle.load(f)
-    
-    imagelist = filter(lambda x:'png' in x, listdir(path))
-    imagelist = sorted(imagelist, key=lambda x: int(filter(str.isdigit, x)))[offset:]
-    small_images_indices = []
-    loaded_images = []
-    index = offset
-    while len(small_images_indices) < batch_size:
-        im = np.asarray(Image.open(path+imagelist[index]).convert('LA'))
-        index += 1
-        if im.shape[0] < 128 and im.shape[1] < 256:
-            a = pad_images(im)
-            loaded_images.append(a)
-            small_images_indices.append(index)
 
-    ytrain = np.array(metadata['label'])[small_images_indices]
+    if not os.path.isfile(path+'imagelist.pickle'):
+        imagelist = filter(lambda x:'png' in x, listdir(path))
+        imagelist = sorted(imagelist, key=lambda x: int(filter(str.isdigit, x)))
+        with open(path+'imagelist.pickle', 'wb') as f:
+            pickle.dump(imagelist,f)
+    else:
+        with open(path+'imagelist.pickle','rb') as f:
+            imagelist = pickle.load(f)
+                
+    loaded_images = []
+    for image in imagelist[offset:offset+batch_size]:
+        img = Image.open(path+image).convert('L').resize((128,32),Image.BILINEAR)
+        im = np.asarray(img)
+        loaded_images.append(im.reshape(128,32,1))
+        
+    ytrain = metadata['label'][offset:offset+batch_size]
     ytrain = one_hot_encode(ytrain)
     return np.array(loaded_images), np.array(ytrain)
 
