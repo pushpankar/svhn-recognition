@@ -46,6 +46,28 @@ def one_hot_encode(labels):
             b[img_num,index,10] = 0
     return b
 
+def get_bounding_box_as_array(metadata, offset, batch_size):
+    metadata['top'] = metadata['top'][offset:offset+batch_size]
+    metadata['left'] = metadata['left'][offset:offset+batch_size]
+    metadata['height'] = metadata['height'][offset:offset+batch_size]
+    metadata['width'] = metadata['width'][offset:offset+batch_size]
+    
+    bbox = np.zeros((batch_size,6,4))
+    for key in metadata:
+        if key != 'label':
+            for img_num in xrange(batch_size):
+                for index,val in enumerate(metadata[key][img_num]):
+                    if key == 'top':
+                        label_num = 0
+                    elif key == 'left':
+                        label_num = 1
+                    elif key == 'height':
+                        label_num = 2
+                    elif key == 'width':
+                        label_num = 3
+                    bbox[img_num,index,label_num] = val
+    return bbox
+   
 def get_train_data(path, offset, batch_size):
     if not os.path.exists(path + 'train_metadata.pickle'):
         prepare_data()
@@ -69,7 +91,8 @@ def get_train_data(path, offset, batch_size):
         
     ytrain = metadata['label'][offset:offset+batch_size]
     ytrain = one_hot_encode(ytrain)
-    return np.array(loaded_images), np.array(ytrain)
+    bbox = get_bounding_box_as_array(metadata, offset, batch_size)
+    return np.array(loaded_images), np.array(ytrain), bbox
 
 def get_test_data(path):
     test = loadmat(path+"test_32x32.mat")
