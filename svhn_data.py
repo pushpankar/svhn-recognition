@@ -1,10 +1,13 @@
+import tarfile
 import h5py
 import os.path
 import numpy as np
 import cPickle as pickle
 from os import listdir
 from PIL import Image
+from six.moves.urllib.request import urlretrieve
 
+url = "http://ufldl.stanford.edu/housenumbers/train.tar.gz"
 f = h5py.File('train/digitStruct.mat')
 metadata = {}
 metadata['height'] = []
@@ -21,7 +24,7 @@ def print_attrs(name, obj):
     else:
         for k in range(obj.shape[0]):
             vals.append(f[obj[k][0]][0][0])
-    metadata[name].append(vals)
+            metadata[name].append(vals)
 
 
 def prepare_data(path):
@@ -36,6 +39,22 @@ def prepare_data(path):
     except Exception as e:
         print('Unable to save data to', pickle_file, ':', e)
         raise
+
+
+def maybe_download(filename, path, expected_bytes):
+    """Download file if not present in the current directory"""
+    if not os.path.exists(filename):
+        filename, _ = urlretrieve(url + filename, filename)
+    statinfo = os.stat(filename)
+    if statinfo.st_size == expected_bytes:
+        print('Found and verified %s' % filename)
+        with tarfile.open(filename) as f:
+            f.extractall(path=path)
+    else:
+        print(statinfo.st_size)
+        raise Exception(
+            'Failed to verify' + filename)
+    return filename
 
 
 def one_hot_encode(labels):
@@ -67,12 +86,13 @@ def get_bounding_box_as_array(metadata, offset, batch_size):
                         label_num = 2
                     elif key == 'width':
                         label_num = 3
-                    bbox[img_num, index, label_num] = val
+                        bbox[img_num, index, label_num] = val
     return bbox
 
 
 def get_train_data(path, offset, batch_size):
     if not os.path.exists(path + 'metadata.pickle'):
+        maybe_download("train.tar.gz", path, 404141560)
         prepare_data(path)
     with open(path + 'metadata.pickle', 'rb') as f:
         metadata = pickle.load(f)
@@ -89,12 +109,23 @@ def get_train_data(path, offset, batch_size):
 
     loaded_images = []
     for image in imagelist[offset:offset+batch_size]:
-        img = Image.open(path+image).convert('L').resize(
-            (128, 32), Image.BILINEAR)
-        im = np.asarray(img)
-        loaded_images.append(im.reshape(128, 32, 1))
+        with Image.open(path+image) as img:
+            img = img.convert('L').resize((128, 32), Image.BILINEAR)
+            im = np.asarray(img)
+            loaded_images.append(im.reshape(128, 32, 1))
 
     ytrain = metadata['label'][offset:offset+batch_size]
     ytrain = one_hot_encode(ytrain)
     bbox = get_bounding_box_as_array(metadata, offset, batch_size)
     return np.array(loaded_images), np.array(ytrain), bbox
+
+
+def get_camera_images():
+    imagelist = listdir('camera-pic/')
+    loaded_images = []
+    for image in imagelist:
+        with Image.open('camera-pic/'+image) as img:
+            img = img.convert('L').resize((128, 32), Image.BILINEAR)
+            im = np.asarray(img)
+            loaded_images.append(im.reshape(128, 32, 1))
+    return np.array(loaded_images)

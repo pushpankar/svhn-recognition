@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from svhn_data import get_train_data
+from svhn_data import get_train_data, get_camera_images
 
 
 def weight_var(shape):
@@ -58,7 +58,8 @@ with graph.as_default():
     tf_valid_dataset = tf.cast(tf.constant(Xvalid), tf.float32)
     tf_train_bbox = tf.placeholder(tf.float32,
                                    shape=(batch_size, num_digits, 4))
-    tf_test_dataset = tf.constant(Xtest)
+    tf_test_dataset = tf.cast(tf.constant(Xtest), tf.float32)
+    tf_camera_data = tf.cast(tf.constant(get_camera_images()), tf.float32)
 
     # Create variables
     # convolutions layer 1
@@ -122,8 +123,8 @@ with graph.as_default():
         reg1 = tf.nn.relu(tf.matmul(reshaped, fc1_Reg_W) + fc1_reg_bias)
         reg2 = tf.nn.relu(tf.matmul(reg1, fc2_reg_W) + fc2_reg_bias)
         reg3 = tf.nn.relu(tf.matmul(reg2, fc3_reg_W) + fc3_reg_bias)
-        bbox_pred = [tf.matmul(reg3, fc3_reg_W) + fc3_reg_bias
-                     for fc3_reg_W, fc3_reg_bias
+        bbox_pred = [tf.matmul(reg3, fc4_reg_W) + fc4_reg_bias
+                     for fc4_reg_W, fc4_reg_bias
                      in zip(fc4_reg_Ws, fc4_reg_biases)]
         bbox_pred = tf.transpose(tf.pack(bbox_pred), [1, 0, 2])
 
@@ -135,10 +136,10 @@ with graph.as_default():
         logits = tf.transpose(logits, [1, 0, 2])
         return logits, bbox_pred
 
-    logits, bbox_pred = model(tf_train_dataset)
+    logits, train_bbox_pred = model(tf_train_dataset)
     loss = tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
-    bbox_loss = tf.nn.l2_loss(bbox_pred - tf_train_bbox)
+    bbox_loss = tf.nn.l2_loss(train_bbox_pred - tf_train_bbox)
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
@@ -148,18 +149,23 @@ with graph.as_default():
                                                staircase=True)
     optimizer = tf.train.AdamOptimizer(
         learning_rate).minimize(loss, global_step=global_step)
-    bbox_optimizer = tf.train.AdamOptimizer(0.001).minimize(bbox_loss)
+    bbox_optimizer = tf.train.AdamOptimizer(
+        learning_rate).minimize(bbox_loss, global_step=global_step)
 
     # Predictions
+    valid_logits, valid_bbox_pred = model(tf_valid_dataset)
+    test_logits, test_bbox_pred = model(tf_test_dataset)
+    camera_logits, camera_bbox_pred = model(tf_camera_data)
     train_pred = tf.nn.softmax(logits)
-    valid_pred = tf.nn.softmax(model(tf_valid_dataset)[0])
-    test_pred = tf.nn.softmax(model(tf_test_dataset))
+    valid_pred = tf.nn.softmax(valid_logits)
+    test_pred = tf.nn.softmax(test_logits)
+    camera_image_pred = tf.nn.softmax(camera_logits)
 
 with tf.Session(graph=graph) as session:
     tf.global_variables_initializer().run()
     print('Initialized')
 
-    for step in range(1001):
+    for step in range(501):
         batch_data, batch_label, bbox = get_train_data('train/',
                                                        offset, batch_size)
         offset += batch_size
@@ -177,3 +183,6 @@ with tf.Session(graph=graph) as session:
             print('Regression loss is {} is {}'.format(step, bbox_cost))
 
     print('Test accuracy is {}'.format(accuracy(test_pred.eval(), ytest)))
+    print('Camera result is {} and bbox is {}'.format(
+        np.argmax(camera_image_pred.eval(), 2),
+        np.argmax(camera_bbox_pred.eval(), 2)))
