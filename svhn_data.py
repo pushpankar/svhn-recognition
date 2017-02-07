@@ -67,26 +67,20 @@ def one_hot_encode(labels):
     return b
 
 
+def pad_list(l):
+    y = np.array([x + [0] * (6 - len(x)) for x in l])
+    return y
+
+
 def get_bounding_box_as_array(metadata, offset, batch_size):
-    metadata['top'] = metadata['top'][offset:offset+batch_size]
-    metadata['left'] = metadata['left'][offset:offset+batch_size]
-    metadata['height'] = metadata['height'][offset:offset+batch_size]
-    metadata['width'] = metadata['width'][offset:offset+batch_size]
+    for key in metadata:
+        metadata[key] = pad_list(metadata[key][offset:offset+batch_size])
     bbox = np.zeros((batch_size, 6, 4))
 
-    for key in metadata:
-        if key != 'label':
-            for img_num in range(batch_size):
-                for index, val in enumerate(metadata[key][img_num]):
-                    if key == 'top':
-                        label_num = 0
-                    elif key == 'left':
-                        label_num = 1
-                    elif key == 'height':
-                        label_num = 2
-                    elif key == 'width':
-                        label_num = 3
-                        bbox[img_num, index, label_num] = val
+    bbox[:, :, 0] = metadata['top']
+    bbox[:, :, 1] = metadata['left']
+    bbox[:, :, 2] = metadata['height']
+    bbox[:, :, 3] = metadata['width']
     return bbox
 
 
@@ -107,6 +101,7 @@ def get_train_data(path, offset, batch_size):
         with open(path+'imagelist.pickle', 'rb') as f:
             imagelist = pickle.load(f)
 
+    # Image.open(path+imagelist[0]).show()
     loaded_images = []
     for image in imagelist[offset:offset+batch_size]:
         with Image.open(path+image) as img:

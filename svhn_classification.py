@@ -30,7 +30,7 @@ num_digits = 6
 batch_size = 64
 patch_size = 5
 depth = 128
-num_hidden1 = 1024
+num_hidden1 = 2048
 num_hidden2 = 512
 reg_hidden1 = 2048
 reg_hidden2 = 1024
@@ -45,7 +45,8 @@ offset += batch_size
 # print dimensions
 print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
       .format(Xvalid.shape, yvalid.shape, bbox_valid.shape))
-print('bbox is {}'.format(bbox_valid[0]))
+print('y is \n{}\nbbox is \n{}'
+      .format(yvalid[0], bbox_valid[0]))
 
 # build a graph
 graph = tf.Graph()
@@ -63,15 +64,15 @@ with graph.as_default():
 
     # Create variables
     # convolutions layer 1
-    layer1_W = weight_var([patch_size, patch_size, num_channels, depth//2])
-    layer1_bias = bias_var([depth//2])
+    layer1_W = weight_var([patch_size, patch_size, num_channels, depth])
+    layer1_bias = bias_var([depth])
 
     # layer2
-    layer2_W = weight_var([patch_size, patch_size, depth//2, depth//2])
-    layer2_bias = bias_var([depth//2])
+    layer2_W = weight_var([patch_size, patch_size, depth, depth])
+    layer2_bias = bias_var([depth])
 
     # layer3
-    layer3_W = weight_var([patch_size, patch_size, depth//2, depth])
+    layer3_W = weight_var([patch_size, patch_size, depth, depth])
     layer3_bias = bias_var([depth])
 
     # layer4
@@ -116,16 +117,14 @@ with graph.as_default():
         conv4 = conv2d(conv3, layer4_W, layer4_bias, stride=[1, 1, 1, 1])
         conv5 = conv2d(conv4, layer5_W, layer5_bias, stride=[1, 1, 1, 1])
         shape = conv5.get_shape().as_list()
-        reshaped = tf.reshape(conv5,
-                              [shape[0], shape[1] * shape[2] * shape[3]])
+        reshaped = tf.reshape(conv5, [shape[0], shape[1] * shape[2] * shape[3]])
 
         # Regression head for bounding box prediction
         reg1 = tf.nn.relu(tf.matmul(reshaped, fc1_Reg_W) + fc1_reg_bias)
         reg2 = tf.nn.relu(tf.matmul(reg1, fc2_reg_W) + fc2_reg_bias)
         reg3 = tf.nn.relu(tf.matmul(reg2, fc3_reg_W) + fc3_reg_bias)
         bbox_pred = [tf.matmul(reg3, fc4_reg_W) + fc4_reg_bias
-                     for fc4_reg_W, fc4_reg_bias
-                     in zip(fc4_reg_Ws, fc4_reg_biases)]
+                     for fc4_reg_W, fc4_reg_bias in zip(fc4_reg_Ws, fc4_reg_biases)]
         bbox_pred = tf.transpose(tf.pack(bbox_pred), [1, 0, 2])
 
         # classification head
@@ -137,8 +136,10 @@ with graph.as_default():
         return logits, bbox_pred
 
     logits, train_bbox_pred = model(tf_train_dataset)
-    loss = tf.reduce_mean(
-        tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
+    loss_per_digit = [tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(logits[:, i, :], tf_train_labels[:, i, :]))
+                      for i in range(num_digits)]
+    loss = tf.add_n(loss_per_digit)
     bbox_loss = tf.nn.l2_loss(train_bbox_pred - tf_train_bbox)
 
     # optimizer
@@ -165,9 +166,8 @@ with tf.Session(graph=graph) as session:
     tf.global_variables_initializer().run()
     print('Initialized')
 
-    for step in range(501):
-        batch_data, batch_label, bbox = get_train_data('train/',
-                                                       offset, batch_size)
+    for step in range(301):
+        batch_data, batch_label, bbox = get_train_data('train/', offset, batch_size)
         offset += batch_size
         feed_dict = {tf_train_dataset: batch_data,
                      tf_train_labels: batch_label,
@@ -175,7 +175,7 @@ with tf.Session(graph=graph) as session:
         _, l, predictions, _, bbox_cost = session.run(
             [optimizer, loss, train_pred, bbox_optimizer, bbox_loss],
             feed_dict=feed_dict)
-        if step % 10 == 0:
+        if step % 25 == 0:
             print('Minibatch accuracy at step {} : {} and loss is {}'.format(
                 step, accuracy(predictions, batch_label), l))
             print('Validation accuracy is {}'.format(
