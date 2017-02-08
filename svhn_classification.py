@@ -4,11 +4,11 @@ from svhn_data import get_train_data, get_camera_images
 
 
 def weight_var(shape):
-    return tf.Variable(tf.truncated_normal(shape, stddev=0.1))
+    return tf.Variable(tf.truncated_normal(shape, stddev=0.1), name='Weight')
 
 
 def bias_var(shape):
-    return tf.Variable(tf.constant(1.0, shape=shape))
+    return tf.Variable(tf.constant(1.0, shape=shape), name='bias')
 
 
 def accuracy(pred, labels):
@@ -16,8 +16,22 @@ def accuracy(pred, labels):
         np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/6
 
 
+def variable_summaries(var):
+    with tf.name_scope('summaries'):
+        mean = tf.reduce_mean(var)
+        tf.summary.scalar('mean', mean)
+        with tf.name_scope('stddev'):
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(var-mean)))
+        tf.summary.scalar('stddev', stddev)
+        tf.summary.scalar('max', tf.reduce_max(var))
+        tf.summary.histogram('histogram', var)
+
+
+def conv_layer(input_tensor, shape, layer_name, act=tf.nn.relu):
+
+
 def conv2d(data, wt, bias, stride=[1, 2, 2, 1]):
-    return tf.nn.relu(tf.nn.conv2d(data, wt, stride, padding='SAME') + bias)
+    return tf.nn.dropout(tf.nn.relu(tf.nn.conv2d(data, wt, stride, padding='SAME') + bias), 0.80)
 
 
 offset = 0
@@ -29,12 +43,10 @@ num_digits = 6
 
 batch_size = 64
 patch_size = 5
-depth = 128
-num_hidden1 = 2048
-num_hidden2 = 512
-reg_hidden1 = 2048
-reg_hidden2 = 1024
-reg_hidden3 = 512
+depth = 32
+num_hidden1 = 1024
+reg_hidden1 = 1024
+reg_hidden2 = 512
 
 Xvalid, yvalid, bbox_valid = get_train_data('train/', offset, batch_size)
 offset += batch_size
@@ -64,50 +76,86 @@ with graph.as_default():
 
     # Create variables
     # convolutions layer 1
-    layer1_W = weight_var([patch_size, patch_size, num_channels, depth])
-    layer1_bias = bias_var([depth])
+    with tf.name_scope('conv1') as scope:
+        layer1_W = weight_var([patch_size, patch_size, num_channels, depth])
+        layer1_bias = bias_var([depth])
+        variable_summaries(layer1_W)
+        variable_summaries(layer1_bias)
 
     # layer2
-    layer2_W = weight_var([patch_size, patch_size, depth, depth])
-    layer2_bias = bias_var([depth])
+    with tf.name_scope('conv2') as scope:
+        layer2_W = weight_var([patch_size, patch_size, depth, depth*2])
+        layer2_bias = bias_var([depth*2])
+        variable_summaries(layer2_W)
+        variable_summaries(layer2_bias)
 
     # layer3
-    layer3_W = weight_var([patch_size, patch_size, depth, depth])
-    layer3_bias = bias_var([depth])
+    with tf.name_scope('conv3') as scope:
+        layer3_W = weight_var([patch_size, patch_size, depth*2, depth*2])
+        layer3_bias = bias_var([depth*2])
+        variable_summaries(layer3_W)
+        variable_summaries(layer3_bias)
 
     # layer4
-    layer4_W = weight_var([patch_size, patch_size, depth, depth])
-    layer4_bias = bias_var([depth])
+    with tf.name_scope('conv4') as scope:
+        layer4_W = weight_var([patch_size, patch_size, depth*2, depth*2])
+        layer4_bias = bias_var([depth*2])
+        variable_summaries(layer4_W)
+        variable_summaries(layer4_bias)
 
     # layer5
-    layer5_W = weight_var([patch_size, patch_size, depth, depth])
-    layer5_bias = bias_var([depth])
+    with tf.name_scope('conv5') as scope:
+        layer5_W = weight_var([patch_size, patch_size, depth*2, depth*2])
+        layer5_bias = bias_var([depth*2])
+        variable_summaries(layer5_W)
+        variable_summaries(layer5_bias)
+
+    # convolution layer 6
+    with tf.name_scope('conv6') as scope:
+        layer6_W = weight_var([patch_size, patch_size, depth*2, depth*4])
+        layer6_bias = bias_var([depth*4])
+        variable_summaries(layer6_W)
+        variable_summaries(layer6_bias)
+
+    # convolution layer 7
+    with tf.name_scope('conv7') as scope:
+        layer7_W = weight_var([patch_size, patch_size, depth*4, depth*4])
+        layer7_bias = bias_var([depth*4])
+        variable_summaries(layer7_W)
+        variable_summaries(layer7_bias)
 
     # Regression head
-    fc1_Reg_W = weight_var([image_height//8*image_width//8*depth, reg_hidden1])
-    fc1_reg_bias = bias_var([reg_hidden1])
+    with tf.name_scope('r_fc1') as scope:
+        fc1_reg_W = weight_var([image_height//16*image_width//16*depth*4, reg_hidden1])
+        fc1_reg_bias = bias_var([reg_hidden1])
+        variable_summaries(fc1_reg_W)
+        variable_summaries(fc1_reg_bias)
 
-    fc2_reg_W = weight_var([reg_hidden1, reg_hidden2])
-    fc2_reg_bias = bias_var([reg_hidden2])
+    with tf.name_scope('r_fc2') as scope:
+        fc2_reg_W = weight_var([reg_hidden1, reg_hidden2])
+        fc2_reg_bias = bias_var([reg_hidden2])
+        variable_summaries(fc2_reg_W)
+        variable_summaries(fc2_reg_bias)
 
-    fc3_reg_W = weight_var([reg_hidden2, reg_hidden3])
-    fc3_reg_bias = bias_var([reg_hidden3])
-
-    fc4_reg_Ws = [weight_var([reg_hidden3, 4]) for _ in range(num_digits)]
-    fc4_reg_biases = [bias_var([4]) for _ in range(num_digits)]
+    with tf.name_scope('r_fc4') as scope:
+        fc3_reg_Ws = [weight_var([reg_hidden2, 4]) for _ in range(num_digits)]
+        fc3_reg_biases = [bias_var([4]) for _ in range(num_digits)]
+        variable_summaries(fc3_reg_Ws)
+        variable_summaries(fc3_reg_biases)
 
     # Classification head
-    # layer 4
-    c1_W = weight_var([image_height//8*image_width//8*depth, num_hidden1])
-    c1_bias = bias_var([num_hidden1])
+    with tf.name_scope('classify1') as scope:
+        c1_W = weight_var([image_height//16*image_width//16*depth*4, num_hidden1])
+        c1_bias = bias_var([num_hidden1])
+        variable_summaries(c1_W)
+        variable_summaries(c1_bias)
 
-    c2_W = weight_var([num_hidden1, num_hidden2])
-    c2_bias = bias_var([num_hidden2])
-
-    # layer 5
-    c3_Ws = [weight_var([num_hidden2, num_labels])
-             for _ in range(num_digits)]
-    c3_biases = [bias_var([num_labels]) for _ in range(num_digits)]
+    with tf.name_scope('classify2') as scope:
+        c3_Ws = [weight_var([num_hidden1, num_labels])
+                 for _ in range(num_digits)]
+        c3_biases = [bias_var([num_labels]) for _ in range(num_digits)]
+        variable_summaries(c3_Ws)
+        variable_summaries(c3_biases)
 
     # Design model
     def model(data):
@@ -116,21 +164,21 @@ with graph.as_default():
         conv3 = conv2d(conv2, layer3_W, layer3_bias)
         conv4 = conv2d(conv3, layer4_W, layer4_bias, stride=[1, 1, 1, 1])
         conv5 = conv2d(conv4, layer5_W, layer5_bias, stride=[1, 1, 1, 1])
-        shape = conv5.get_shape().as_list()
-        reshaped = tf.reshape(conv5, [shape[0], shape[1] * shape[2] * shape[3]])
+        conv6 = conv2d(conv5, layer6_W, layer6_bias)
+        conv7 = conv2d(conv6, layer7_W, layer7_bias, stride=[1, 1, 1, 1])
+        shape = conv7.get_shape().as_list()
+        reshaped = tf.reshape(conv7, [shape[0], shape[1] * shape[2] * shape[3]])
 
         # Regression head for bounding box prediction
-        reg1 = tf.nn.relu(tf.matmul(reshaped, fc1_Reg_W) + fc1_reg_bias)
+        reg1 = tf.nn.relu(tf.matmul(reshaped, fc1_reg_W) + fc1_reg_bias)
         reg2 = tf.nn.relu(tf.matmul(reg1, fc2_reg_W) + fc2_reg_bias)
-        reg3 = tf.nn.relu(tf.matmul(reg2, fc3_reg_W) + fc3_reg_bias)
-        bbox_pred = [tf.matmul(reg3, fc4_reg_W) + fc4_reg_bias
-                     for fc4_reg_W, fc4_reg_bias in zip(fc4_reg_Ws, fc4_reg_biases)]
+        bbox_pred = [tf.matmul(reg2, fc3_reg_W) + fc3_reg_bias
+                     for fc3_reg_W, fc3_reg_bias in zip(fc3_reg_Ws, fc3_reg_biases)]
         bbox_pred = tf.transpose(tf.pack(bbox_pred), [1, 0, 2])
 
         # classification head
         hidden1 = tf.nn.relu(tf.matmul(reshaped, c1_W) + c1_bias)
-        hidden2 = tf.nn.relu(tf.matmul(hidden1, c2_W) + c2_bias)
-        logits = tf.pack([tf.matmul(hidden2, c3_W) + c3_bias
+        logits = tf.pack([tf.matmul(hidden1, c3_W) + c3_bias
                           for c3_W, c3_bias in zip(c3_Ws, c3_biases)])
         logits = tf.transpose(logits, [1, 0, 2])
         return logits, bbox_pred
@@ -139,8 +187,14 @@ with graph.as_default():
     loss_per_digit = [tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(logits[:, i, :], tf_train_labels[:, i, :]))
                       for i in range(num_digits)]
-    loss = tf.add_n(loss_per_digit)
-    bbox_loss = tf.nn.l2_loss(train_bbox_pred - tf_train_bbox)
+    with tf.name_scope('cross_entropy'):
+        loss = tf.add_n(loss_per_digit)
+        bbox_loss = tf.nn.l2_loss(train_bbox_pred - tf_train_bbox)
+
+    tf.summary.scalar('loss', loss)
+    tf.summary.scalar('bbox_loss', bbox_loss)
+    merged = tf.summary.merge_all()
+    train_writer = tf.train.SummaryWriter('log', graph)
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
@@ -172,10 +226,11 @@ with tf.Session(graph=graph) as session:
         feed_dict = {tf_train_dataset: batch_data,
                      tf_train_labels: batch_label,
                      tf_train_bbox: bbox}
-        _, l, predictions, _, bbox_cost = session.run(
-            [optimizer, loss, train_pred, bbox_optimizer, bbox_loss],
+        _, l, predictions, _, bbox_cost, summary = session.run(
+            [optimizer, loss, train_pred, bbox_optimizer, bbox_loss, merged],
             feed_dict=feed_dict)
-        if step % 25 == 0:
+        train_writer.add_summary(summary, i)
+        if step % 10 == 0:
             print('Minibatch accuracy at step {} : {} and loss is {}'.format(
                 step, accuracy(predictions, batch_label), l))
             print('Validation accuracy is {}'.format(
