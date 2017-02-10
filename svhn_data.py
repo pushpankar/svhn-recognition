@@ -60,7 +60,7 @@ def maybe_download(filename, path, expected_bytes):
 def one_hot_encode(labels):
     b = np.zeros((len(labels), 6, 11))
     b[:, :, 10] = 1
-    for img_num in range(len(labels)):
+    for img_num in np.arange(len(labels)):
         for index, num in enumerate(labels[img_num]):
             b[img_num, index, num] = 1
             b[img_num, index, 10] = 0

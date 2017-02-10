@@ -148,7 +148,7 @@ with graph.as_default():
             reg2 = tf.nn.relu(tf.matmul(reg1, fc2_reg_W) + fc2_reg_bias)
         with tf.name_scope('reg_list'):
             bbox_pred = [tf.matmul(reg2, fc3_reg_W) + fc3_reg_bias
-                     for fc3_reg_W, fc3_reg_bias in zip(fc3_reg_Ws, fc3_reg_biases)]
+                         for fc3_reg_W, fc3_reg_bias in zip(fc3_reg_Ws, fc3_reg_biases)]
         with tf.name_scope('transpose'):
             bbox_pred = tf.transpose(tf.pack(bbox_pred), [1, 0, 2])
 
@@ -157,7 +157,7 @@ with graph.as_default():
             hidden1 = tf.nn.relu(tf.matmul(reshaped, c1_W) + c1_bias)
         with tf.name_scope('classify_list'):
             logits = tf.pack([tf.matmul(hidden1, c3_W) + c3_bias
-                          for c3_W, c3_bias in zip(c3_Ws, c3_biases)])
+                              for c3_W, c3_bias in zip(c3_Ws, c3_biases)])
             logits = tf.transpose(logits, [1, 0, 2])
         return logits, bbox_pred
 
@@ -172,7 +172,7 @@ with graph.as_default():
     tf.summary.scalar('loss', loss)
     tf.summary.scalar('bbox_loss', bbox_loss)
     merged = tf.summary.merge_all()
-    train_writer = tf.train.SummaryWriter('log', graph)
+    train_writer = tf.summary.FileWriter('log', graph)
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
@@ -180,10 +180,11 @@ with graph.as_default():
     learning_rate = tf.train.exponential_decay(starter_learning_rate,
                                                global_step, 5, 0.90,
                                                staircase=True)
-    optimizer = tf.train.AdamOptimizer(
-        learning_rate).minimize(loss, global_step=global_step)
-    bbox_optimizer = tf.train.AdamOptimizer(
-        learning_rate).minimize(bbox_loss, global_step=global_step)
+    total_loss = bbox_loss + loss
+    optimizer = tf.train.AdagradOptimizer(
+        learning_rate).minimize(total_loss, global_step=global_step)
+    # bbox_optimizer = tf.train.AdagradOptimizer(
+    #    learning_rate).minimize(bbox_loss, global_step=global_step)
 
     # Predictions
     valid_logits, valid_bbox_pred = model(tf_valid_dataset)
@@ -204,10 +205,10 @@ with tf.Session(graph=graph) as session:
         feed_dict = {tf_train_dataset: batch_data,
                      tf_train_labels: batch_label,
                      tf_train_bbox: bbox}
-        _, l, predictions, _, bbox_cost, summary = session.run(
-            [optimizer, loss, train_pred, bbox_optimizer, bbox_loss, merged],
+        _, l, predictions, bbox_cost, summary = session.run(
+            [optimizer, loss, train_pred, bbox_loss, merged],
             feed_dict=feed_dict)
-        train_writer.add_summary(summary, i)
+        train_writer.add_summary(summary, step)
         if step % 10 == 0:
             print('Minibatch accuracy at step {} : {} and loss is {}'.format(
                 step, accuracy(predictions, batch_label), l))
@@ -217,5 +218,4 @@ with tf.Session(graph=graph) as session:
 
     print('Test accuracy is {}'.format(accuracy(test_pred.eval(), ytest)))
     print('Camera result is {} and bbox is {}'.format(
-        np.argmax(camera_image_pred.eval(), 2),
-        np.argmax(camera_bbox_pred.eval(), 2)))
+        np.argmax(camera_image_pred.eval(), 2), camera_bbox_pred.eval()))
