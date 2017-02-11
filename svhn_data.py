@@ -57,14 +57,18 @@ def maybe_download(filename, path, expected_bytes):
     return filename
 
 
-def one_hot_encode(labels):
+def process_label(labels):
     b = np.zeros((len(labels), 6, 11))
     b[:, :, 10] = 1
+    shifts = []
     for img_num in np.arange(len(labels)):
+        shift = np.random.randint(6 - len(labels[img_num]))
+        shifts.append(shift)
         for index, num in enumerate(labels[img_num]):
             b[img_num, index, num] = 1
             b[img_num, index, 10] = 0
-    return b
+        b[img_num] = np.roll(b[img_num], shift, axis=0)
+    return b, shifts
 
 
 def pad_list(l):
@@ -72,7 +76,7 @@ def pad_list(l):
     return y
 
 
-def get_bounding_box_as_array(metadata, offset, batch_size):
+def get_bounding_box_as_array(metadata, offset, batch_size, shifts):
     for key in metadata:
         metadata[key] = pad_list(metadata[key][offset:offset+batch_size])
     bbox = np.zeros((batch_size, 6, 4))
@@ -81,6 +85,9 @@ def get_bounding_box_as_array(metadata, offset, batch_size):
     bbox[:, :, 1] = metadata['left']
     bbox[:, :, 2] = metadata['height']
     bbox[:, :, 3] = metadata['width']
+    print(shifts)
+    for i, shift in enumerate(shifts):
+        bbox[i] = np.roll(bbox[i], shift, axis=0)
     return bbox
 
 
@@ -110,8 +117,8 @@ def get_train_data(path, offset, batch_size):
             loaded_images.append(im.reshape(128, 32, 1))
 
     ytrain = metadata['label'][offset:offset+batch_size]
-    ytrain = one_hot_encode(ytrain)
-    bbox = get_bounding_box_as_array(metadata, offset, batch_size)
+    ytrain, shifts = process_label(ytrain)
+    bbox = get_bounding_box_as_array(metadata, offset, batch_size, shifts)
     return np.array(loaded_images), np.array(ytrain), bbox
 
 

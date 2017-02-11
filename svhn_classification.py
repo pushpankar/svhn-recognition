@@ -12,8 +12,7 @@ def bias_var(shape):
 
 
 def accuracy(pred, labels):
-    return (100.0 * np.sum(
-        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/6
+    return (100.0 * np.sum(np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/6
 
 
 def variable_summaries(var):
@@ -63,7 +62,7 @@ print("Image is \n{}".format(Xvalid[0]))
 print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
       .format(Xvalid.shape, yvalid.shape, bbox_valid.shape))
 print('y is \n{}\nbbox is \n{}'
-      .format(yvalid[0], bbox_valid[0]))
+      .format(yvalid[0:4], bbox_valid[0:4]))
 
 # build a graph
 graph = tf.Graph()
