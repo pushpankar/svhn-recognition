@@ -1,0 +1,13 @@
+camera-pic/
+cropped-svhn/
+extra.tar.gz
+log/
+report2.html
+stark-gcpr15.pdf
+svhn-data.py~
+svhn_classification.py~
+svhn_data.pyc
+svhn_data.py~
+test.tar.gz
+train.tar.gz
+train/

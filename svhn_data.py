@@ -106,7 +106,7 @@ def get_train_data(path, offset, batch_size):
     for image in imagelist[offset:offset+batch_size]:
         with Image.open(path+image) as img:
             img = img.convert('L').resize((128, 32), Image.BILINEAR)
-            im = np.asarray(img)
+            im = np.asarray(img) / 255.0
             loaded_images.append(im.reshape(128, 32, 1))
 
     ytrain = metadata['label'][offset:offset+batch_size]
@@ -121,6 +121,6 @@ def get_camera_images():
     for image in imagelist:
         with Image.open('camera-pic/'+image) as img:
             img = img.convert('L').resize((128, 32), Image.BILINEAR)
-            im = np.asarray(img)
+            im = np.asarray(img)/255.0
             loaded_images.append(im.reshape(128, 32, 1))
     return np.array(loaded_images)

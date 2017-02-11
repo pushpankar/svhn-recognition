@@ -27,11 +27,15 @@ def variable_summaries(var):
         tf.summary.histogram('histogram', var)
 
 
-def conv2d(data, wt, bias, stride=[1, 2, 2, 1]):
+def conv2d(data, wt, bias, max_pool=True):
+    stride = [1, 1, 1, 1]
     variable_summaries(wt)
     variable_summaries(bias)
-    return tf.nn.dropout(tf.nn.relu(tf.nn.conv2d(data, wt, stride, padding='SAME', name='convolution') + bias,
-                                    name='relu'), 0.80, name='dropout')
+    conv = tf.nn.relu(tf.nn.conv2d(data, wt, stride, padding='SAME', name='convolution') + bias,
+                      name='relu')
+    if max_pool:
+        conv = tf.nn.max_pool(conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+    return tf.nn.dropout(conv, 0.80, name='dropout')
 
 
 offset = 0
@@ -53,6 +57,7 @@ offset += batch_size
 Xtest, ytest, bbox_test = get_train_data('train/', offset, batch_size)
 offset += batch_size
 
+print("Image is \n{}".format(Xvalid[0]))
 
 # print dimensions
 print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
@@ -130,13 +135,13 @@ with graph.as_default():
         with tf.name_scope('conv3'):
             conv3 = conv2d(conv2, layer3_W, layer3_bias)
         with tf.name_scope('conv4'):
-            conv4 = conv2d(conv3, layer4_W, layer4_bias, stride=[1, 1, 1, 1])
+            conv4 = conv2d(conv3, layer4_W, layer4_bias, max_pool=False)
         with tf.name_scope('conv5'):
-            conv5 = conv2d(conv4, layer5_W, layer5_bias, stride=[1, 1, 1, 1])
+            conv5 = conv2d(conv4, layer5_W, layer5_bias, max_pool=False)
         with tf.name_scope('conv6'):
             conv6 = conv2d(conv5, layer6_W, layer6_bias)
         with tf.name_scope('conv7'):
-            conv7 = conv2d(conv6, layer7_W, layer7_bias, stride=[1, 1, 1, 1])
+            conv7 = conv2d(conv6, layer7_W, layer7_bias, max_pool=False)
         with tf.name_scope('reshape'):
             shape = conv7.get_shape().as_list()
             reshaped = tf.reshape(conv7, [shape[0], shape[1] * shape[2] * shape[3]])
