@@ -4,11 +4,16 @@ from svhn_data import get_train_data, get_camera_images
 
 
 def weight_var(shape):
-    return tf.Variable(tf.truncated_normal(shape, stddev=0.1), name='Weight')
+    try:
+        W = tf.get_variable('Weight', shape=shape, initializer=tf.contrib.layers.xavier_initializer())
+    except ValueError:
+        tf.get_variable_scope().reuse_variables()
+        W = tf.get_variable('Weight', shape=shape, initializer=tf.contrib.layers.xavier_initializer())
+    return W
 
 
 def bias_var(shape):
-    return tf.Variable(tf.constant(1.0, shape=shape), name='bias')
+    return tf.Variable(tf.constant(1.0, shape=[shape]), name='bias')
 
 
 def accuracy(pred, labels):
@@ -17,18 +22,34 @@ def accuracy(pred, labels):
 
 
 def variable_summaries(var):
-    with tf.name_scope('summaries'):
+    with tf.variable_scope('summaries'):
         mean = tf.reduce_mean(var)
         tf.summary.scalar('mean', mean)
-        with tf.name_scope('stddev'):
+        with tf.variable_scope('stddev'):
             stddev = tf.sqrt(tf.reduce_mean(tf.square(var-mean)))
         tf.summary.scalar('stddev', stddev)
         tf.summary.scalar('max', tf.reduce_max(var))
         tf.summary.histogram('histogram', var)
 
 
-def conv2d(data, wt, bias, max_pool=True):
+def linear_layer(data, shape):
+    W = weight_var(shape)
+    bias = bias_var(shape[-1])
+    activation = tf.matmul(data, W) + bias
+    return activation
+
+
+def reg_layer(data, shape):
+    W = weight_var(shape)
+    bias = bias_var(shape[-1])
+    reg = tf.matmul(data, W) + bias
+    return tf.nn.relu(reg)
+
+
+def conv2d(data, shape, max_pool=True):
     stride = [1, 1, 1, 1]
+    wt = weight_var(shape)
+    bias = bias_var(shape[-1])
     variable_summaries(wt)
     variable_summaries(bias)
     conv = tf.nn.relu(tf.nn.conv2d(data, wt, stride, padding='SAME', name='convolution') + bias,
@@ -79,96 +100,87 @@ with graph.as_default():
 
     # Create variables
     # convolutions layer 1
-    layer1_W = weight_var([patch_size, patch_size, num_channels, depth])
-    layer1_bias = bias_var([depth])
+    layer1_shape = [patch_size, patch_size, num_channels, depth]
 
     # layer2
-    layer2_W = weight_var([patch_size, patch_size, depth, depth*2])
-    layer2_bias = bias_var([depth*2])
+    layer2_shape = [patch_size, patch_size, depth, depth*2]
 
     # layer3
-    layer3_W = weight_var([patch_size, patch_size, depth*2, depth*2])
-    layer3_bias = bias_var([depth*2])
+    layer3_shape = [patch_size, patch_size, depth*2, depth*2]
 
     # layer4
-    layer4_W = weight_var([patch_size, patch_size, depth*2, depth*2])
-    layer4_bias = bias_var([depth*2])
+    layer4_shape = [patch_size, patch_size, depth*2, depth*2]
 
     # layer5
-    layer5_W = weight_var([patch_size, patch_size, depth*2, depth*2])
-    layer5_bias = bias_var([depth*2])
+    layer5_shape = [patch_size, patch_size, depth*2, depth*2]
 
     # convolution layer 6
-    layer6_W = weight_var([patch_size, patch_size, depth*2, depth*4])
-    layer6_bias = bias_var([depth*4])
+    layer6_shape = [patch_size, patch_size, depth*2, depth*4]
 
     # convolution layer 7
-    layer7_W = weight_var([patch_size, patch_size, depth*4, depth*4])
-    layer7_bias = bias_var([depth*4])
+    layer7_shape = [patch_size, patch_size, depth*4, depth*4]
 
     # Regression head
-    fc1_reg_W = weight_var([image_height//16*image_width//16*depth*4, reg_hidden1])
-    fc1_reg_bias = bias_var([reg_hidden1])
+    reg1_shape = [image_height//16*image_width//16*depth*4, reg_hidden1]
 
-    fc2_reg_W = weight_var([reg_hidden1, reg_hidden2])
-    fc2_reg_bias = bias_var([reg_hidden2])
+    reg2_shape = [reg_hidden1, reg_hidden2]
 
-    fc3_reg_Ws = [weight_var([reg_hidden2, 4]) for _ in range(num_digits)]
-    fc3_reg_biases = [bias_var([4]) for _ in range(num_digits)]
+    reg3_shape = [reg_hidden2, 4]
 
     # Classification head
-    c1_W = weight_var([image_height//16*image_width//16*depth*4, num_hidden1])
-    c1_bias = bias_var([num_hidden1])
+    c1_shape = [image_height//16*image_width//16*depth*4, num_hidden1]
 
-    c3_Ws = [weight_var([num_hidden1, num_labels])
-             for _ in range(num_digits)]
-    c3_biases = [bias_var([num_labels]) for _ in range(num_digits)]
+    c2_shape = [num_hidden1, num_labels]
 
     # Design model
     def model(data):
-        with tf.name_scope('conv1'):
-            conv1 = conv2d(data, layer1_W, layer1_bias)
-        with tf.name_scope('conv2'):
-            conv2 = conv2d(conv1, layer2_W, layer2_bias)
-        with tf.name_scope('conv3'):
-            conv3 = conv2d(conv2, layer3_W, layer3_bias)
-        with tf.name_scope('conv4'):
-            conv4 = conv2d(conv3, layer4_W, layer4_bias, max_pool=False)
-        with tf.name_scope('conv5'):
-            conv5 = conv2d(conv4, layer5_W, layer5_bias, max_pool=False)
-        with tf.name_scope('conv6'):
-            conv6 = conv2d(conv5, layer6_W, layer6_bias)
-        with tf.name_scope('conv7'):
-            conv7 = conv2d(conv6, layer7_W, layer7_bias, max_pool=False)
-        with tf.name_scope('reshape'):
+        with tf.variable_scope('conv1'):
+            conv1 = conv2d(data, layer1_shape)
+        with tf.variable_scope('conv2'):
+            conv2 = conv2d(conv1, layer2_shape)
+        with tf.variable_scope('conv3'):
+            conv3 = conv2d(conv2, layer3_shape)
+        with tf.variable_scope('conv4'):
+            conv4 = conv2d(conv3, layer4_shape, max_pool=False)
+        with tf.variable_scope('conv5'):
+            conv5 = conv2d(conv4, layer5_shape, max_pool=False)
+        with tf.variable_scope('conv6'):
+            conv6 = conv2d(conv5, layer6_shape)
+        with tf.variable_scope('conv7'):
+            conv7 = conv2d(conv6, layer7_shape, max_pool=False)
+        with tf.variable_scope('reshape'):
             shape = conv7.get_shape().as_list()
             reshaped = tf.reshape(conv7, [shape[0], shape[1] * shape[2] * shape[3]])
 
         # Regression head for bounding box prediction
-        with tf.name_scope('reg1'):
-            reg1 = tf.nn.relu(tf.matmul(reshaped, fc1_reg_W) + fc1_reg_bias)
-        with tf.name_scope('reg2'):
-            reg2 = tf.nn.relu(tf.matmul(reg1, fc2_reg_W) + fc2_reg_bias)
-        with tf.name_scope('reg_list'):
-            bbox_pred = [tf.matmul(reg2, fc3_reg_W) + fc3_reg_bias
-                         for fc3_reg_W, fc3_reg_bias in zip(fc3_reg_Ws, fc3_reg_biases)]
-        with tf.name_scope('transpose'):
+        with tf.variable_scope('reg1'):
+            reg1 = reg_layer(reshaped, reg1_shape)
+        with tf.variable_scope('reg2'):
+            reg2 = reg_layer(reg1, reg2_shape)
+
+        bbox_pred = []
+        for i in range(num_digits):
+            with tf.variable_scope('reg_list-'+str(i)):
+                bbox_pred.append(linear_layer(reg2, reg3_shape))
+        with tf.variable_scope('transpose'):
             bbox_pred = tf.transpose(tf.pack(bbox_pred), [1, 0, 2])
 
         # classification head
-        with tf.name_scope('classify1'):
-            hidden1 = tf.nn.relu(tf.matmul(reshaped, c1_W) + c1_bias)
-        with tf.name_scope('classify_list'):
-            logits = tf.pack([tf.matmul(hidden1, c3_W) + c3_bias
-                              for c3_W, c3_bias in zip(c3_Ws, c3_biases)])
-            logits = tf.transpose(logits, [1, 0, 2])
+        with tf.variable_scope('classify1'):
+            hidden1 = reg_layer(reshaped, c1_shape)
+        logits = []
+        for i in range(num_digits):
+            with tf.variable_scope('classify_list-'+str(i)):
+                logits.append(linear_layer(hidden1, c2_shape))
+        with tf.variable_scope('logit-trans'):
+            logits = tf.transpose(tf.pack(logits), [1, 0, 2])
         return logits, bbox_pred
 
     logits, train_bbox_pred = model(tf_train_dataset)
     loss_per_digit = [tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(logits[:, i, :], tf_train_labels[:, i, :]))
                       for i in range(num_digits)]
-    with tf.name_scope('loss'):
+    with tf.variable_scope('loss'):
         loss = tf.add_n(loss_per_digit, name='loss')
         bbox_loss = tf.nn.l2_loss(train_bbox_pred - tf_train_bbox, name='reg_loss')
 
