@@ -52,12 +52,10 @@ num_hidden1 = 1024
 reg_hidden1 = 1024
 reg_hidden2 = 512
 
-Xvalid, yvalid, bbox_valid = get_train_data('train/', offset, batch_size)
-offset += batch_size
-Xtest, ytest, bbox_test = get_train_data('train/', offset, batch_size)
-offset += batch_size
-
-print("Image is \n{}".format(Xvalid[0]))
+Xvalid, yvalid, bbox_valid = get_train_data('train/', offset, batch_size//2)
+offset += batch_size//2
+Xtest, ytest, bbox_test = get_train_data('train/', offset, batch_size//2)
+offset += batch_size//2
 
 # print dimensions
 print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
@@ -205,8 +203,8 @@ with tf.Session(graph=graph) as session:
     print('Initialized')
 
     for step in range(301):
-        batch_data, batch_label, bbox = get_train_data('train/', offset, batch_size)
-        offset += batch_size
+        batch_data, batch_label, bbox = get_train_data('train/', offset, batch_size//2)
+        offset += batch_size//2
         feed_dict = {tf_train_dataset: batch_data,
                      tf_train_labels: batch_label,
                      tf_train_bbox: bbox}
