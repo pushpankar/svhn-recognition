@@ -112,14 +112,29 @@ def get_train_data(path, offset, batch_size):
     loaded_images = []
     for image in imagelist[offset:offset+batch_size]:
         with Image.open(path+image) as img:
-            img = img.convert('L').resize((128, 32), Image.BILINEAR)
+            img = img.convert('L').resize((128, 128), Image.BILINEAR)
             im = np.asarray(img) / 255.0
-            loaded_images.append(im.reshape(128, 32, 1))
+            loaded_images.append(im.reshape(128, 128, 1))
 
     ytrain = metadata['label'][offset:offset+batch_size]
     ytrain, shifts = process_label(ytrain)
     bbox = get_bounding_box_as_array(metadata, offset, batch_size, shifts)
+    long_num_index = np.argsort(map(len, ytrain))[-batch_size//8:]
+    loaded_images, ytrain, bbox = augment_dataset(loaded_images, ytrain, bbox, long_num_index)
     return np.array(loaded_images), np.array(ytrain), bbox
+
+
+def augment_dataset(images, labels, bbox, long_num_index):
+    for i in long_num_index:
+        for _ in range(4):
+            angle = np.random.randint(15)
+            image = Image.fromarray(images[i].reshape(128, 128))
+            images.append(np.asarray(image.rotate(angle)).reshape(128, 128, 1))
+            images.append(np.asarray(image.rotate(-angle)).reshape(128, 128, 1))
+            for _ in range(2):
+                labels = np.append(labels, [labels[i]], axis=0)
+                bbox = np.append(bbox, [bbox[i]], axis=0)
+    return images, labels, bbox
 
 
 def get_camera_images():
@@ -127,7 +142,7 @@ def get_camera_images():
     loaded_images = []
     for image in imagelist:
         with Image.open('camera-pic/'+image) as img:
-            img = img.convert('L').resize((128, 32), Image.BILINEAR)
+            img = img.convert('L').resize((128, 128), Image.BILINEAR)
             im = np.asarray(img)/255.0
-            loaded_images.append(im.reshape(128, 32, 1))
+            loaded_images.append(im.reshape(128, 128, 1))
     return np.array(loaded_images)
