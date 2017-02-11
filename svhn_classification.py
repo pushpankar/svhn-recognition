@@ -60,13 +60,13 @@ def conv2d(data, shape, max_pool=True):
 
 
 offset = 0
-image_height = 32
+image_height = 128
 image_width = 128
 num_channels = 1
 num_labels = 11
 num_digits = 6
 
-batch_size = 64
+batch_size = 16
 patch_size = 5
 depth = 32
 num_hidden1 = 1024
@@ -193,10 +193,10 @@ with graph.as_default():
     global_step = tf.Variable(0, trainable=False)
     starter_learning_rate = 0.005
     learning_rate = tf.train.exponential_decay(starter_learning_rate,
-                                               global_step, 5, 0.90,
+                                               global_step, 5, 0.70,
                                                staircase=True)
     total_loss = bbox_loss + loss
-    optimizer = tf.train.AdagradOptimizer(
+    optimizer = tf.train.AdamOptimizer(
         learning_rate).minimize(total_loss, global_step=global_step)
     # bbox_optimizer = tf.train.AdagradOptimizer(
     #    learning_rate).minimize(bbox_loss, global_step=global_step)
