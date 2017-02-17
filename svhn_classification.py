@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
-from svhn_data import get_train_data, get_camera_images
+from svhn_data import get_data, get_camera_images
+from PIL import Image
 
 
 def weight_var(shape):
@@ -18,7 +19,7 @@ def bias_var(shape):
 
 def accuracy(pred, labels):
     return (100.0 * np.sum(
-        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/6
+        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/5
 
 
 def variable_summaries(var):
@@ -39,7 +40,7 @@ def linear_layer(data, shape):
     return activation
 
 
-def reg_layer(data, shape):
+def fc_layer(data, shape):
     W = weight_var(shape)
     bias = bias_var(shape[-1])
     reg = tf.matmul(data, W) + bias
@@ -60,23 +61,29 @@ def conv2d(data, shape, max_pool=True):
 
 
 offset = 0
-image_height = 128
-image_width = 128
+image_height = 160
+image_width = 160
 num_channels = 1
 num_labels = 11
-num_digits = 6
+num_digits = 5
 
-batch_size = 16
+batch_size = 32
 patch_size = 5
 depth = 32
 num_hidden1 = 1024
 reg_hidden1 = 1024
 reg_hidden2 = 512
 
-Xvalid, yvalid, bbox_valid = get_train_data('train/', offset, batch_size//2)
+Xvalid, yvalid, bbox_valid = get_data('train/', offset, batch_size//2)
 offset += batch_size//2
-Xtest, ytest, bbox_test = get_train_data('train/', offset, batch_size//2)
+Xtest, ytest, bbox_test = get_data('train/', offset, batch_size//2)
 offset += batch_size//2
+
+# Check if images and labels are correct
+random_pos = np.random.randint(0, batch_size, size=5)
+for i in random_pos:
+    Image.fromarray(Xvalid[i].reshape((image_height, image_width))).show()
+    print(np.argmax(yvalid[i], axis=1))
 
 # print dimensions
 print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
@@ -154,9 +161,9 @@ with graph.as_default():
 
         # Regression head for bounding box prediction
         with tf.variable_scope('reg1'):
-            reg1 = reg_layer(reshaped, reg1_shape)
+            reg1 = fc_layer(reshaped, reg1_shape)
         with tf.variable_scope('reg2'):
-            reg2 = reg_layer(reg1, reg2_shape)
+            reg2 = fc_layer(reg1, reg2_shape)
 
         bbox_pred = []
         for i in range(num_digits):
@@ -167,7 +174,7 @@ with graph.as_default():
 
         # classification head
         with tf.variable_scope('classify1'):
-            hidden1 = reg_layer(reshaped, c1_shape)
+            hidden1 = fc_layer(reshaped, c1_shape)
         logits = []
         for i in range(num_digits):
             with tf.variable_scope('classify_list-'+str(i)):
@@ -180,9 +187,11 @@ with graph.as_default():
     loss_per_digit = [tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(logits[:, i, :], tf_train_labels[:, i, :]))
                       for i in range(num_digits)]
+    bbox_loss_per_digit = [tf.nn.l2_loss(tf_train_bbox[:, i, :] - tf_train_bbox[:, i, :])
+                           for i in range(num_digits)]
     with tf.variable_scope('loss'):
         loss = tf.add_n(loss_per_digit, name='loss')
-        bbox_loss = tf.nn.l2_loss(train_bbox_pred - tf_train_bbox, name='reg_loss')
+        bbox_loss = tf.add_n(bbox_loss_per_digit)
 
     tf.summary.scalar('loss', loss)
     tf.summary.scalar('bbox_loss', bbox_loss)
@@ -191,11 +200,11 @@ with graph.as_default():
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
-    starter_learning_rate = 0.005
+    starter_learning_rate = 0.0001
     learning_rate = tf.train.exponential_decay(starter_learning_rate,
                                                global_step, 5, 0.70,
                                                staircase=True)
-    total_loss = bbox_loss + loss
+    total_loss = loss + bbox_loss
     optimizer = tf.train.AdamOptimizer(
         learning_rate).minimize(total_loss, global_step=global_step)
     # bbox_optimizer = tf.train.AdagradOptimizer(
@@ -214,14 +223,14 @@ with tf.Session(graph=graph) as session:
     tf.global_variables_initializer().run()
     print('Initialized')
 
-    for step in range(301):
-        batch_data, batch_label, bbox = get_train_data('train/', offset, batch_size//2)
+    for step in range(101):
+        batch_data, batch_label, bbox = get_data('train/', offset, batch_size//2)
         offset += batch_size//2
         feed_dict = {tf_train_dataset: batch_data,
                      tf_train_labels: batch_label,
                      tf_train_bbox: bbox}
         _, l, predictions, bbox_cost, summary = session.run(
-            [optimizer, loss, train_pred, bbox_loss, merged],
+            [optimizer, loss, train_pred, bbox_loss,  merged],
             feed_dict=feed_dict)
         train_writer.add_summary(summary, step)
         if step % 10 == 0:
