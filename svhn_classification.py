@@ -19,7 +19,7 @@ def bias_var(shape):
 
 def accuracy(pred, labels):
     return (100.0 * np.sum(
-        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/5
+        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/6
 
 
 def variable_summaries(var):
@@ -65,7 +65,7 @@ image_height = 160
 image_width = 160
 num_channels = 1
 num_labels = 11
-num_digits = 5
+num_digits = 6
 
 batch_size = 32
 patch_size = 5

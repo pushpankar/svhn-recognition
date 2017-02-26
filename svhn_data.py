@@ -60,7 +60,7 @@ def maybe_download(filename, path, expected_bytes):
 
 
 def one_hot_encode(labels):
-    b = np.zeros((len(labels), 5, 11))
+    b = np.zeros((len(labels), 6, 11))
     b[:, :, 10] = 1
     for img_num in np.arange(len(labels)):
         for index, num in enumerate(labels[img_num]):
@@ -70,14 +70,14 @@ def one_hot_encode(labels):
 
 
 def pad_list(l):
-    y = np.array([x + [0] * (5 - len(x)) for x in l])
+    y = np.array([x + [0] * (6 - len(x)) for x in l])
     return y
 
 
 def get_bounding_box_as_array(metadata, offset, batch_size):
     for key in metadata:
         metadata[key] = pad_list(metadata[key][offset:offset+batch_size])
-    bbox = np.zeros((batch_size, 5, 4))
+    bbox = np.zeros((batch_size, 6, 4))
 
     bbox[:, :, 0] = metadata['top']
     bbox[:, :, 1] = metadata['left']
@@ -97,7 +97,7 @@ def valid_ratio(img):
 def img_to_array(img):
     img = img.convert('L').resize((image_height, image_width), Image.BICUBIC)
     im = np.asarray(img)
-    return im.reshape(image_height, image_width)
+    return im.reshape(image_height, image_width, 1)
 
 
 def get_data(path, offset, batch_size):
@@ -139,31 +139,14 @@ def get_data(path, offset, batch_size):
 
     long_images, long_labels = get_long_numbers(path, imagelist, metadata,
                                                 batch_size)
-    ytrain = np.concatenate((np.array(long_labels), np.array(ytrain)), axis=0)
     loaded_images = np.concatenate((np.array(loaded_images), long_images),
                                    axis=0)
     ytrain = one_hot_encode(ytrain)
+    ytrain = np.concatenate((np.array(long_labels), np.array(ytrain)), axis=0)
     # @TODO: Fix bounding boxes
     bbox = get_bounding_box_as_array(metadata, offset, batch_size)
     print(loaded_images.shape, ytrain.shape)
     return loaded_images, ytrain, bbox
-
-
-def augment_dataset(images, labels, bbox, long_num_index):
-    for i in long_num_index:
-        for _ in range(4):
-            angle = np.random.randint(15)
-            image = Image.fromarray(images[i].reshape(image_height, image_width))
-            images.append(np.asarray(image.rotate(angle)).reshape(image_height,
-                                                                  image_width,
-                                                                  1))
-            images.append(np.asarray(image.rotate(-angle)).reshape(image_height,
-                                                                   image_height,
-                                                                   1))
-            for _ in range(2):
-                labels = np.append(labels, [labels[i]], axis=0)
-                bbox = np.append(bbox, [bbox[i]], axis=0)
-    return images, labels, bbox
 
 
 def get_long_numbers(path, imagelist, metadata, size):
@@ -177,7 +160,8 @@ def get_long_numbers(path, imagelist, metadata, size):
         with Image.open(path + imagelist[i]) as img:
             loaded_images.append(img_to_array(img))
             image_labels.append(labels[i])
-    return np.array(loaded_images), np.array(image_labels)
+    image_labels = one_hot_encode(image_labels)
+    return np.array(loaded_images), image_labels
 
 
 def get_camera_images():
@@ -188,5 +172,5 @@ def get_camera_images():
             img = img.convert('L').resize((image_height, image_width),
                                           Image.BILINEAR)
             im = np.asarray(img)/255.0
-            loaded_images.append(im.reshape(image_height, image_width))
+            loaded_images.append(im.reshape(image_height, image_width, 1))
     return np.array(loaded_images)
