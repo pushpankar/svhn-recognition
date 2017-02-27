@@ -15,8 +15,8 @@ metadata['label'] = []
 metadata['left'] = []
 metadata['top'] = []
 metadata['width'] = []
-image_width = 160
-image_height = 160
+image_width = 64
+image_height = 64
 
 
 def print_attrs(name, obj):
@@ -60,7 +60,7 @@ def maybe_download(filename, path, expected_bytes):
 
 
 def one_hot_encode(labels):
-    b = np.zeros((len(labels), 6, 11))
+    b = np.zeros((len(labels), 5, 11))
     b[:, :, 10] = 1
     for img_num in np.arange(len(labels)):
         for index, num in enumerate(labels[img_num]):
@@ -70,13 +70,13 @@ def one_hot_encode(labels):
 
 
 def pad_list(l):
-    while len(l) < 6:
+    while len(l) < 5:
         l = np.append(l, [0])
     return np.array(l)
 
 
 def bbox_as_array(bbox):
-    new_bbox = np.zeros((6, 4))
+    new_bbox = np.zeros((5, 4))
     for i, point in enumerate(bbox):
         new_bbox[:, i] = pad_list(point)
     return new_bbox
@@ -122,24 +122,22 @@ def get_data(path, offset, batch_size):
     bbox = []
     imagelist = imagelist[offset:]
     label_list = metadata['label'][offset:]
-    i = 0
+    i = -1
     while len(loaded_images) < batch_size:
+        i += 1
         image = imagelist[i]
         label = label_list[i]
-    # for image in imagelist[offset:offset+batch_size]:
-        with Image.open(path+image) as img:
-            img, bounds = crop_images(img, metadata, i+offset)
-            i += 1
-            im = img_to_array(img)
-            loaded_images.append(im)
-            ytrain.append(label)
-            bbox.append(bbox_as_array(bounds))
+        if (len(label) >= 3 and len(label) < 6):
+            with Image.open(path+image) as img:
+                img, bounds = crop_images(img, metadata, i+offset)
+                im = img_to_array(img)
+                loaded_images.append(im)
+                ytrain.append(label)
+                bbox.append(bbox_as_array(bounds))
 
     ytrain = one_hot_encode(ytrain)
     loaded_images = np.array(loaded_images)
     bbox = np.array(bbox)
-    # @TODO: Fix bounding boxes
-    print(loaded_images.shape, ytrain.shape, bbox.shape)
     return loaded_images, ytrain, bbox
 
 
@@ -155,21 +153,6 @@ def crop_images(img, metadata, i):
     img = img.crop((min_left, min_top, max_right, max_bottom))
     return img, (np.array(top) - min_top, np.array(left) - min_left,
                  height, width)
-
-
-def get_long_numbers(path, imagelist, metadata, size):
-    labels = metadata['label']
-    # filter long numbers
-    long_num_index = np.argsort(map(len, labels))[-100:]
-    long_num_index = np.random.choice(long_num_index, size=size)
-    loaded_images = []
-    image_labels = []
-    for i in long_num_index:
-        with Image.open(path + imagelist[i]) as img:
-            loaded_images.append(img_to_array(img))
-            image_labels.append(labels[i])
-    image_labels = one_hot_encode(image_labels)
-    return np.array(loaded_images), image_labels
 
 
 def get_camera_images():

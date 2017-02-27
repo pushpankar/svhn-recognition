@@ -19,7 +19,7 @@ def bias_var(shape):
 
 def accuracy(pred, labels):
     return (100.0 * np.sum(
-        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/6
+        np.argmax(pred, 2) == np.argmax(labels, 2)) / pred.shape[0])/5
 
 
 def variable_summaries(var):
@@ -61,11 +61,11 @@ def conv2d(data, shape, max_pool=True):
 
 
 offset = 0
-image_height = 160
-image_width = 160
+image_height = 64
+image_width = 64
 num_channels = 1
 num_labels = 11
-num_digits = 6
+num_digits = 5
 
 batch_size = 32
 patch_size = 5
@@ -79,17 +79,18 @@ offset += batch_size
 Xtest, ytest, bbox_test = get_data('train/', offset, batch_size)
 offset += batch_size
 
+# print dimensions
+print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
+      .format(Xvalid.shape, yvalid.shape, bbox_valid.shape))
+print('y is \n{}\nbbox is \n{}'
+      .format(yvalid[0], bbox_valid[0]))
+
 # Check if images and labels are correct
 random_pos = np.random.randint(0, batch_size, size=5)
 for i in random_pos:
     Image.fromarray(Xvalid[i].reshape((image_height, image_width))).show()
     print(np.argmax(yvalid[i], axis=1))
 
-# print dimensions
-print("Xvalid shape is {} and yvalid shape is {} and bbox is {}"
-      .format(Xvalid.shape, yvalid.shape, bbox_valid.shape))
-print('y is \n{}\nbbox is \n{}'
-      .format(yvalid[0], bbox_valid[0]))
 
 # build a graph
 graph = tf.Graph()
@@ -224,8 +225,8 @@ with tf.Session(graph=graph) as session:
     print('Initialized')
 
     for step in range(101):
-        batch_data, batch_label, bbox = get_data('train/', offset, batch_size//2)
-        offset += batch_size//2
+        batch_data, batch_label, bbox = get_data('train/', offset, batch_size)
+        offset += batch_size
         feed_dict = {tf_train_dataset: batch_data,
                      tf_train_labels: batch_label,
                      tf_train_bbox: bbox}
