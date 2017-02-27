@@ -61,16 +61,16 @@ def conv2d(data, shape, max_pool=True):
 
 
 offset = 0
-image_height = 64
-image_width = 64
+image_height = 32
+image_width = 32
 num_channels = 1
 num_labels = 11
 num_digits = 5
 
 batch_size = 32
 patch_size = 5
-depth = 32
-num_hidden1 = 1024
+depth = 128
+num_hidden1 = 2048
 reg_hidden1 = 1024
 reg_hidden2 = 512
 
@@ -88,8 +88,8 @@ print('y is \n{}\nbbox is \n{}'
 # Check if images and labels are correct
 random_pos = np.random.randint(0, batch_size, size=5)
 for i in random_pos:
-    Image.fromarray(Xvalid[i].reshape((image_height, image_width))).show()
-    print(np.argmax(yvalid[i], axis=1))
+    Image.fromarray(Xtest[i].reshape((image_height, image_width))).show()
+    print(np.argmax(ytest[i], axis=1))
 
 
 # build a graph
@@ -188,7 +188,7 @@ with graph.as_default():
     loss_per_digit = [tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(logits[:, i, :], tf_train_labels[:, i, :]))
                       for i in range(num_digits)]
-    bbox_loss_per_digit = [tf.nn.l2_loss(tf_train_bbox[:, i, :] - tf_train_bbox[:, i, :])
+    bbox_loss_per_digit = [tf.nn.l2_loss(train_bbox_pred[:, i, :] - tf_train_bbox[:, i, :])
                            for i in range(num_digits)]
     with tf.variable_scope('loss'):
         loss = tf.add_n(loss_per_digit, name='loss')
@@ -205,11 +205,9 @@ with graph.as_default():
     learning_rate = tf.train.exponential_decay(starter_learning_rate,
                                                global_step, 5, 0.70,
                                                staircase=True)
-    total_loss = loss + bbox_loss
+    total_loss = loss
     optimizer = tf.train.AdamOptimizer(
         learning_rate).minimize(total_loss, global_step=global_step)
-    # bbox_optimizer = tf.train.AdagradOptimizer(
-    #    learning_rate).minimize(bbox_loss, global_step=global_step)
 
     # Predictions
     valid_logits, valid_bbox_pred = model(tf_valid_dataset)

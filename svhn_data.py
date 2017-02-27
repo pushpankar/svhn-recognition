@@ -15,8 +15,8 @@ metadata['label'] = []
 metadata['left'] = []
 metadata['top'] = []
 metadata['width'] = []
-image_width = 64
-image_height = 64
+image_width = 32
+image_height = 32
 
 
 def print_attrs(name, obj):
