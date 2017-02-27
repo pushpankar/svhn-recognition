@@ -74,10 +74,10 @@ num_hidden1 = 1024
 reg_hidden1 = 1024
 reg_hidden2 = 512
 
-Xvalid, yvalid, bbox_valid = get_data('train/', offset, batch_size//2)
-offset += batch_size//2
-Xtest, ytest, bbox_test = get_data('train/', offset, batch_size//2)
-offset += batch_size//2
+Xvalid, yvalid, bbox_valid = get_data('train/', offset, batch_size)
+offset += batch_size
+Xtest, ytest, bbox_test = get_data('train/', offset, batch_size)
+offset += batch_size
 
 # Check if images and labels are correct
 random_pos = np.random.randint(0, batch_size, size=5)

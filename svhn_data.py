@@ -70,20 +70,16 @@ def one_hot_encode(labels):
 
 
 def pad_list(l):
-    y = np.array([x + [0] * (6 - len(x)) for x in l])
-    return y
+    while len(l) < 6:
+        l = np.append(l, [0])
+    return np.array(l)
 
 
-def get_bounding_box_as_array(metadata, offset, batch_size):
-    for key in metadata:
-        metadata[key] = pad_list(metadata[key][offset:offset+batch_size])
-    bbox = np.zeros((batch_size, 6, 4))
-
-    bbox[:, :, 0] = metadata['top']
-    bbox[:, :, 1] = metadata['left']
-    bbox[:, :, 2] = metadata['height']
-    bbox[:, :, 3] = metadata['width']
-    return bbox
+def bbox_as_array(bbox):
+    new_bbox = np.zeros((6, 4))
+    for i, point in enumerate(bbox):
+        new_bbox[:, i] = pad_list(point)
+    return new_bbox
 
 
 def valid_ratio(img):
@@ -123,6 +119,7 @@ def get_data(path, offset, batch_size):
     # And remaining as augmented long numbers
     loaded_images = []
     ytrain = []
+    bbox = []
     imagelist = imagelist[offset:]
     label_list = metadata['label'][offset:]
     i = 0
@@ -131,22 +128,33 @@ def get_data(path, offset, batch_size):
         label = label_list[i]
     # for image in imagelist[offset:offset+batch_size]:
         with Image.open(path+image) as img:
+            img, bounds = crop_images(img, metadata, i+offset)
             i += 1
-            if valid_ratio(img):
-                im = img_to_array(img)
-                loaded_images.append(im)
-                ytrain.append(label)
+            im = img_to_array(img)
+            loaded_images.append(im)
+            ytrain.append(label)
+            bbox.append(bbox_as_array(bounds))
 
-    long_images, long_labels = get_long_numbers(path, imagelist, metadata,
-                                                batch_size)
-    loaded_images = np.concatenate((np.array(loaded_images), long_images),
-                                   axis=0)
     ytrain = one_hot_encode(ytrain)
-    ytrain = np.concatenate((np.array(long_labels), np.array(ytrain)), axis=0)
+    loaded_images = np.array(loaded_images)
+    bbox = np.array(bbox)
     # @TODO: Fix bounding boxes
-    bbox = get_bounding_box_as_array(metadata, offset, batch_size)
-    print(loaded_images.shape, ytrain.shape)
+    print(loaded_images.shape, ytrain.shape, bbox.shape)
     return loaded_images, ytrain, bbox
+
+
+def crop_images(img, metadata, i):
+    height = metadata['height'][i]
+    width = metadata['width'][i]
+    top = metadata['top'][i]
+    left = metadata['left'][i]
+    min_left = min(left)
+    min_top = min(top)
+    max_right = max(left) + width[np.argmax(left)]
+    max_bottom = max(top) + height[np.argmax(top)]
+    img = img.crop((min_left, min_top, max_right, max_bottom))
+    return img, (np.array(top) - min_top, np.array(left) - min_left,
+                 height, width)
 
 
 def get_long_numbers(path, imagelist, metadata, size):
